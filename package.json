@@ -1,8 +1,8 @@
 {
-  "name": "batch-webhook-fly",
+  "name": "cosmetics-data-hub-v2",
   "version": "1.0.0",
   "private": true,
-  "description": "Monday.com batch code webhook service for Fly.io deployment",
+  "description": "Cosmetics Data Hub v2 with PostgreSQL and Fly.io deployment",
   "scripts": {
     "dev": "next dev -p 3005",
     "build": "next build",
@@ -13,20 +13,27 @@
     "db:migrate": "node scripts/migrate.js"
   },
   "dependencies": {
-    "nanoid": "^5.0.7",
-    "next": "^15.3.0",
-    "pg": "^8.13.1",
+    "csv-parse": "^6.1.0",
+    "multer": "^2.0.2",
+    "nanoid": "^5.1.5",
+    "next": "^15.4.1",
+    "pg": "^8.16.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/multer": "^1.4.13",
     "@types/node": "^22.5.5",
     "@types/pg": "^8.11.10",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
     "eslint": "^9.31.0",
     "eslint-config-next": "^15.4.1",
-    "typescript": "^5.6.3"
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
   },
   "engines": {
     "node": ">=20.18.2"

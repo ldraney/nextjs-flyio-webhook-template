@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Batch Webhook Fly',
-  description: 'Monday.com batch code webhook service running on Fly.io',
+  title: 'Cosmetics Data Hub',
+  description: 'Centralized database for cosmetic laboratory data including formulas, ingredients, and pricing',
 }
 
 export default function RootLayout({
@@ -12,12 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body style={{ 
-        fontFamily: 'system-ui, sans-serif',
-        margin: 0,
-        padding: '2rem',
-        backgroundColor: '#f5f5f5'
-      }}>
+      <body className="bg-gray-50 min-h-screen">
         {children}
       </body>
     </html>

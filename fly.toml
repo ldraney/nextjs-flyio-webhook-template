@@ -1,5 +1,5 @@
 # fly.toml app configuration file
-app = 'fly-webhook-postgres'
+app = 'cosmetics-data-hub-v2'
 primary_region = 'sea'
 
 [build]
