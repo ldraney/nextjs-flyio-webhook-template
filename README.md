@@ -1,353 +1,225 @@
-# Next.js + Fly.io Webhook Template with PostgreSQL
+# Cosmetics Data Hub v2
 
-Production-ready webhook service template using Next.js 15, PostgreSQL, and Fly.io deployment with built-in observability.
+A centralized PostgreSQL database and web application for managing cosmetic laboratory data including formulas, ingredients, and pricing information. Built with Next.js 15, PostgreSQL, and deployed on Fly.io.
 
-✅ **Fully Tested & Production Ready** - Successfully deployed at [fly-webhook-postgres.fly.dev](https://fly-webhook-postgres.fly.dev/api/webhook)
+🎉 **Live Production Site**: [cosmetics-data-hub-v2.fly.dev](https://cosmetics-data-hub-v2.fly.dev)
 
-## Features
+## 🎯 **Purpose**
 
-✅ **Next.js 15** with App Router and TypeScript  
-✅ **PostgreSQL** database integration with connection pooling  
-✅ **Fly.io deployment** with auto-scaling  
-✅ **Docker + docker-compose** for local development with PostgreSQL  
-✅ **Webhook endpoint** with GET/POST handling and database persistence  
-✅ **Database migrations** with automatic deployment  
-✅ **Health checks** with database connectivity monitoring  
-✅ **Structured logging** with correlation IDs  
-✅ **Template-ready** for any webhook service
+This application serves as a complete data management system for cosmetics laboratories, providing:
 
-## Quick Start
+- **Formula Management** - Store and organize cosmetic formulas with ingredients and percentages
+- **Ingredient Database** - Maintain a comprehensive catalog of cosmetic ingredients with INCI names
+- **CSV Import System** - Bulk import formula data with preview and validation
+- **Laboratory Interface** - User-friendly admin interface for lab technicians
+- **API Access** - RESTful APIs for integration with other laboratory systems
 
-### 1. Use This Template
-```bash
-# Clone or use as GitHub template
-git clone https://github.com/ldraney/nextjs-flyio-webhook-template.git my-webhook
-cd my-webhook
-npm install
+## ✅ **What's Working**
+
+🔥 **Core Features:**
+- **CSV Import with Preview** - Upload and preview formulas before importing
+- **Formula Management** - Complete CRUD operations for cosmetic formulas
+- **Ingredient Database** - Manage ingredient catalog with INCI names and suppliers
+- **Admin Interface** - Beautiful Tailwind CSS interface for data management
+- **Real-time Validation** - Formula percentage validation with visual indicators
+
+🚀 **Infrastructure:**
+- **PostgreSQL Cluster** - Shared database supporting multiple applications
+- **Automatic Migrations** - Database schema updates deploy automatically
+- **Auto-scaling** - Scales to 0 when idle, auto-starts on requests
+- **Health Monitoring** - Database connectivity and application health checks
+- **SSL/TLS** - Automatic certificate management
+- **Static File Serving** - Properly configured for Next.js standalone mode
+
+## 🎯 **Live Application**
+
+### **Main Features**
+- **Homepage**: https://cosmetics-data-hub-v2.fly.dev
+- **CSV Import**: https://cosmetics-data-hub-v2.fly.dev/admin/import
+- **Formula Management**: https://cosmetics-data-hub-v2.fly.dev/admin/formulas
+- **Ingredient Database**: https://cosmetics-data-hub-v2.fly.dev/admin/ingredients
+
+### **API Endpoints**
+- **Health Check**: https://cosmetics-data-hub-v2.fly.dev/api/webhook
+- **Formula API**: https://cosmetics-data-hub-v2.fly.dev/api/formulas
+- **Ingredient API**: https://cosmetics-data-hub-v2.fly.dev/api/ingredients
+- **Import API**: https://cosmetics-data-hub-v2.fly.dev/api/import
+
+## 🛠 **Technical Architecture**
+
+### **Database Schema**
+```sql
+-- Core cosmetics data tables
+CREATE TABLE formulas (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    version VARCHAR(50) DEFAULT '1.0',
+    status VARCHAR(20) DEFAULT 'needs_review',
+    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ingredients (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    inci_name VARCHAR(255),
+    supplier_code VARCHAR(100),
+    category VARCHAR(100),
+    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE formula_ingredients (
+    id SERIAL PRIMARY KEY,
+    formula_id INTEGER REFERENCES formulas(id) ON DELETE CASCADE,
+    ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE CASCADE,
+    percentage DECIMAL(5,2) NOT NULL CHECK (percentage >= 0 AND percentage <= 100),
+    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(formula_id, ingredient_id)
+);
 ```
 
-### 2. Local Development with Docker
-```bash
-# Start with PostgreSQL database
-docker-compose up --build
+### **Infrastructure**
+- **PostgreSQL Cluster**: `cosmetics-postgres` (shared across applications)
+- **App Database**: `cosmetics_data_hub_v2` (isolated within cluster)
+- **Deployment**: Rolling updates with health checks
+- **Scaling**: Auto-stop/start based on traffic
 
-# Test webhook endpoints
-curl http://localhost:3005/api/webhook
-curl -X POST http://localhost:3005/api/webhook -H "Content-Type: application/json" -d '{"event": {"type": "test", "data": "sample"}}'
+## 🔧 **Key Technical Solutions**
 
-# View events with database data
-curl 'http://localhost:3005/api/webhook?events=true'
+### **1. Static File Serving Fix**
+**Problem**: Tailwind CSS not loading in production (404 errors)
+**Solution**: Updated Dockerfile for Next.js standalone mode:
+```dockerfile
+# Copy static files for standalone mode
+RUN cp -r .next/static .next/standalone/.next/static
 ```
 
-### 3. Deploy to Fly.io
+### **2. Database Migration System**
+**Problem**: Multiple SQL migration files not being executed
+**Solution**: Enhanced migration script to read SQL files:
+```javascript
+const migrations = [
+  {
+    version: '20250101_create_tables',
+    sqlFile: 'db/migrations/001_create_tables.sql'
+  },
+  // ...
+]
 
-#### Create PostgreSQL Database
+// Read and execute SQL files
+const sqlFilePath = path.join(__dirname, '..', migration.sqlFile)
+const sql = fs.readFileSync(sqlFilePath, 'utf8')
+await client.query(sql)
+```
 
-**⚠️ Important**: Use **Fly Postgres (unmanaged)**, not Fly MPG (Managed Postgres). The multi-app sharing functionality with `fly postgres attach` is only available with unmanaged Postgres.
+### **3. Shared PostgreSQL Architecture**
+**Problem**: Multiple applications needing shared database access
+**Solution**: Fly.io unmanaged PostgreSQL with app-specific isolation:
+```bash
+# Create shared cluster
+fly postgres create --name cosmetics-postgres
 
+# Attach multiple apps (each gets own database)
+fly postgres attach cosmetics-postgres -a cosmetics-data-hub-v2
+fly postgres attach cosmetics-postgres -a formula-review-service
+```
+
+## 🚀 **Deployment Guide**
+
+### **1. Prerequisites**
 ```bash
 # Install Fly CLI and login
 fly auth login
 
-# Create PostgreSQL cluster (unmanaged)
-fly postgres create --name webhook-postgres --region sea --initial-cluster-size 1 --vm-size shared-cpu-1x --volume-size 10
-
-# This creates an unmanaged PostgreSQL cluster that supports:
-# - Multiple apps sharing the same database infrastructure
-# - Automatic database and user creation per attached app
-# - Cost-effective shared resources
-
-# Save the database credentials shown after creation!
-# Example output:
-# Username:    postgres
-# Password:    [GENERATED_PASSWORD]
-# Hostname:    webhook-postgres.internal
-# Flycast:     fdaa:1f:87ca:0:1::3
-# Connection string: postgres://postgres:[PASSWORD]@webhook-postgres.flycast:5432
+# Clone and setup
+git clone https://github.com/your-org/cosmetics-data-hub-v2.git
+cd cosmetics-data-hub-v2
+npm install
 ```
 
-**Why Unmanaged Postgres?**
-- **Multi-app support**: `fly postgres attach` creates isolated databases for each app
-- **Shared infrastructure**: Multiple applications can share the same PostgreSQL cluster
-- **Cost effective**: One database cluster serves multiple applications
-- **Automatic isolation**: Each app gets its own database and user within the cluster
-
-#### Deploy Application
+### **2. Database Setup**
 ```bash
-# Create the app
-fly apps create fly-webhook-postgres
+# Create PostgreSQL cluster
+fly postgres create --name cosmetics-postgres --region sea --initial-cluster-size 1 --vm-size shared-cpu-1x --volume-size 10
 
-# Attach database to your app (creates isolated database and user)
-fly postgres attach webhook-postgres -a fly-webhook-postgres
+# Create app
+fly apps create cosmetics-data-hub-v2
 
-# This automatically:
-# - Creates a database named "fly_webhook_postgres"
-# - Creates a user named "fly_webhook_postgres" 
-# - Sets DATABASE_URL environment variable
-# - Grants appropriate permissions
+# Attach database (creates isolated database and user)
+fly postgres attach cosmetics-postgres -a cosmetics-data-hub-v2
+```
 
+### **3. Deploy**
+```bash
 # Deploy with automatic migrations
-fly deploy
+fly deploy --now
 
-# Test live deployment
-curl https://fly-webhook-postgres.fly.dev/api/webhook
+# Verify deployment
+curl https://cosmetics-data-hub-v2.fly.dev/api/webhook
 ```
 
-### 4. Test Production Deployment
-```bash
-# Health check
-curl https://fly-webhook-postgres.fly.dev/api/webhook
-
-# Test webhook processing
-curl -X POST https://fly-webhook-postgres.fly.dev/api/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"event": {"type": "create_pulse", "pulseName": "Test Task"}}'
-
-# View stored events
-curl 'https://fly-webhook-postgres.fly.dev/api/webhook?events=true'
-```
-
-## Database Features
-
-### Webhook Event Storage
-All webhook events are automatically stored in PostgreSQL with:
-- **Correlation IDs** for request tracking
-- **Event type** classification  
-- **Full payload** as JSONB
-- **Processing status** tracking
-- **Timestamps** for created/updated times
-
-### Database Health Monitoring
-The application includes:
-- **Connection pooling** for optimal performance
-- **Health checks** exposed via API endpoints
-- **Automatic reconnection** handling
-- **Environment-specific SSL** configuration
-
-### Migration System
-- **Automatic migrations** on deployment
-- **Version tracking** to prevent duplicate runs
-- **Rollback safety** with transaction handling
-
-## API Endpoints
-
-### `GET /api/webhook`
-Health check with database status:
-```json
-{
-  "status": "ready",
-  "service": "batch-webhook-fly",
-  "timestamp": "2025-07-18T13:56:11.058Z",
-  "environment": "production",
-  "database": {
-    "connected": true,
-    "status": "healthy"
-  },
-  "message": "Webhook endpoint is operational"
-}
-```
-
-### `GET /api/webhook?events=true`
-Health check with recent events from database:
-```json
-{
-  "status": "ready",
-  "database": {
-    "connected": true,
-    "status": "healthy"
-  },
-  "recent_events": [
-    {
-      "id": 1,
-      "correlation_id": "abc123",
-      "event_type": "test",
-      "payload": {"event": {"type": "test", "data": "sample"}},
-      "processed": true,
-      "created_at": "2025-07-18T13:56:16.514Z"
-    }
-  ]
-}
-```
-
-### `POST /api/webhook`
-Process webhook events with database persistence:
-```json
-{
-  "status": "success",
-  "correlation_id": "abc123",
-  "event_type": "test",
-  "timestamp": "2025-07-18T13:56:16.530Z",
-  "message": "Webhook processed and stored successfully"
-}
-```
-
-## Project Structure
+## 📊 **Project Structure**
 
 ```
+cosmetics-data-hub-v2/
 ├── app/
-│   ├── api/
-│   │   └── webhook/
-│   │       └── route.ts          # Enhanced webhook API with database
-│   ├── layout.tsx               # Root layout
-│   └── page.tsx                 # Homepage with status
+│   ├── admin/                    # Admin interface
+│   │   ├── formulas/            # Formula management
+│   │   ├── import/              # CSV import with preview
+│   │   └── ingredients/         # Ingredient database
+│   ├── api/                     # API endpoints
+│   │   ├── formulas/           # Formula CRUD
+│   │   ├── ingredients/        # Ingredient CRUD
+│   │   ├── import/             # CSV import processing
+│   │   ├── preview/            # CSV preview
+│   │   └── webhook/            # Health checks
+│   ├── globals.css             # Tailwind CSS
+│   ├── layout.tsx              # Root layout
+│   └── page.tsx                # Homepage
+├── db/
+│   └── migrations/             # SQL migration files
 ├── lib/
-│   └── database.ts              # PostgreSQL utilities and connection
+│   ├── database.ts             # Database utilities (template)
+│   ├── db.ts                   # Database utilities (cosmetics)
+│   ├── csv-import.ts           # CSV import logic
+│   └── csv-preview.ts          # CSV preview logic
 ├── scripts/
 │   ├── init-db.js              # Database initialization
-│   └── migrate.js              # Database migrations
-├── docker-compose.yml          # Local development with PostgreSQL
+│   └── migrate.js              # Migration runner
+├── fly.toml                    # Fly.io configuration
 ├── Dockerfile                  # Production container
-├── fly.toml                    # Fly.io configuration with migrations
-└── README.md
+└── docker-compose.yml          # Local development
 ```
 
-## Environment Variables
+## 🔧 **Using This as a Template**
 
-### Required
-- `DATABASE_URL` - PostgreSQL connection string (set automatically by Fly.io)
-- `NODE_ENV` - Environment (development/production)
+This project demonstrates production-ready patterns for complex applications and can serve as a foundation for similar projects. 
 
-### Optional
-- `PORT` - Server port (default: 3000)
+**📖 For detailed template usage, see**: [docs/USING-AS-TEMPLATE.md](docs/USING-AS-TEMPLATE.md)
 
-## Database Schema
+### **Template Benefits**
+- **Proven deployment pipeline** with Next.js 15 + PostgreSQL + Fly.io
+- **Real-world feature integration** with CSV import and admin interfaces
+- **Production-ready solutions** for common issues (CSS loading, database migrations)
+- **Scalable architecture** with multi-app database sharing
 
-### `webhook_events` Table
-```sql
-CREATE TABLE webhook_events (
-  id SERIAL PRIMARY KEY,
-  correlation_id VARCHAR(255) NOT NULL,
-  event_type VARCHAR(255),
-  payload JSONB,
-  processed BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-```
+### **Perfect For**
+- Laboratory data management systems
+- Inventory and catalog management
+- CSV import/export applications
+- Admin interfaces with database backends
+- Multi-tenant SaaS platforms
 
-### Indexes
-- `correlation_id` - For tracking specific requests
-- `event_type` - For filtering by event type
-- `created_at` - For chronological queries
+### **Key Technical Solutions**
+- **Static file serving fix** for Next.js standalone mode
+- **SQL file-based migrations** for maintainable schema changes
+- **Multi-app PostgreSQL** sharing with isolated databases
+- **TypeScript strict mode** compliance for production reliability
 
-## Development Scripts
-
-```bash
-# Development
-npm run dev              # Start development server
-npm run build           # Build for production
-npm run start           # Start production server
-
-# Code Quality
-npm run lint            # Run ESLint
-npm run type-check      # Run TypeScript checking
-
-# Database
-npm run db:init         # Initialize database (development)
-npm run db:migrate      # Run database migrations
-
-# Docker
-docker-compose up       # Start with PostgreSQL
-docker-compose down     # Stop containers
-```
-
-## Production Deployment
-
-### Database Setup
-1. Create PostgreSQL cluster: `fly postgres create --name webhook-postgres --region sea --initial-cluster-size 1 --vm-size shared-cpu-1x --volume-size 10`
-2. Create app: `fly apps create fly-webhook-postgres`
-3. Attach to app: `fly postgres attach webhook-postgres -a fly-webhook-postgres`
-4. Deploy with migrations: `fly deploy`
-
-**Multi-App Sharing Example:**
-```bash
-# First app (this template)
-fly postgres attach webhook-postgres -a fly-webhook-postgres
-
-# Second app (another webhook service)
-fly postgres attach webhook-postgres -a second-webhook-app
-
-# Each app gets its own isolated database within the same cluster
-```
-
-### Scaling
-```bash
-# Scale application
-fly scale count 2
-fly scale vm shared-cpu-2x
-
-# Scale database
-fly machine update MACHINE_ID --vm-size shared-cpu-2x -a your-postgres-app
-```
-
-### Monitoring
-```bash
-# Application logs
-fly logs -a fly-webhook-postgres
-
-# Database logs  
-fly logs -a webhook-postgres
-
-# Connection to database
-fly postgres connect -a webhook-postgres
-```
-
-## Example Use Cases
-
-This template works perfectly for:
-- **Monday.com webhooks** - Task creation, status updates with database tracking
-- **GitHub webhooks** - Repository events, PR notifications with audit trail
-- **Stripe webhooks** - Payment processing, subscription events with persistence
-- **Slack webhooks** - Message processing, slash commands with history
-- **Custom API webhooks** - Any service that sends HTTP callbacks
-
-## Production Features
-
-- **Auto-scaling** - Scales to 0 when idle, auto-starts on requests
-- **Database persistence** - All webhook events stored with metadata
-- **Health monitoring** - Database connectivity and application health
-- **Automatic migrations** - Schema updates deployed with application
-- **SSL/TLS** - Automatic certificate management
-- **Error tracking** - Structured logging with correlation IDs
-- **Connection pooling** - Optimized database performance
-
-## Troubleshooting
-
-### Database Connection Issues
-```bash
-# Check database status
-fly status -a webhook-postgres
-
-# Check app secrets
-fly secrets list -a fly-webhook-postgres
-
-# Test database connection
-fly postgres connect -a webhook-postgres
-```
-
-### Migration Issues
-```bash
-# Run migrations manually
-fly ssh console -a fly-webhook-postgres
-npm run db:migrate
-```
-
-### Local Development
-```bash
-# For local development with Fly.io database
-fly proxy 15432:5432 -a webhook-postgres
-
-# Update .env.local
-DATABASE_URL=postgres://fly_webhook_postgres:password@localhost:15432/fly_webhook_postgres
-```
-
-## Support
-
-- **Fly.io docs**: https://fly.io/docs/
-- **PostgreSQL docs**: https://www.postgresql.org/docs/
-- **Next.js docs**: https://nextjs.org/docs
-- **Template issues**: Open an issue on this repository
-
-## License
+## 📄 **License**
 
 MIT License - feel free to use for any project!
+
+---
+
+**Built with** ❤️ **using Next.js 15, PostgreSQL, and Fly.io**
