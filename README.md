@@ -40,49 +40,69 @@ curl 'http://localhost:3005/api/webhook?events=true'
 ### 3. Deploy to Fly.io
 
 #### Create PostgreSQL Database
+
+**⚠️ Important**: Use **Fly Postgres (unmanaged)**, not Fly MPG (Managed Postgres). The multi-app sharing functionality with `fly postgres attach` is only available with unmanaged Postgres.
+
 ```bash
 # Install Fly CLI and login
 fly auth login
 
-# Create PostgreSQL cluster
-fly postgres create
-# Choose:
-# - App name: your-org-postgres
-# - Organization: Your organization
-# - Region: Same as your app (e.g., sea)
-# - Configuration: High Availability for production
-# - VM Size: shared-cpu-1x (can scale later)
+# Create PostgreSQL cluster (unmanaged)
+fly postgres create --name webhook-postgres --region sea --initial-cluster-size 1 --vm-size shared-cpu-1x --volume-size 10
+
+# This creates an unmanaged PostgreSQL cluster that supports:
+# - Multiple apps sharing the same database infrastructure
+# - Automatic database and user creation per attached app
+# - Cost-effective shared resources
 
 # Save the database credentials shown after creation!
+# Example output:
+# Username:    postgres
+# Password:    [GENERATED_PASSWORD]
+# Hostname:    webhook-postgres.internal
+# Flycast:     fdaa:1f:87ca:0:1::3
+# Connection string: postgres://postgres:[PASSWORD]@webhook-postgres.flycast:5432
 ```
+
+**Why Unmanaged Postgres?**
+- **Multi-app support**: `fly postgres attach` creates isolated databases for each app
+- **Shared infrastructure**: Multiple applications can share the same PostgreSQL cluster
+- **Cost effective**: One database cluster serves multiple applications
+- **Automatic isolation**: Each app gets its own database and user within the cluster
 
 #### Deploy Application
 ```bash
-# Launch app (choose unique name)
-fly launch
+# Create the app
+fly apps create fly-webhook-postgres
 
-# Attach database to your app
-fly postgres attach your-org-postgres -a your-app-name
+# Attach database to your app (creates isolated database and user)
+fly postgres attach webhook-postgres -a fly-webhook-postgres
+
+# This automatically:
+# - Creates a database named "fly_webhook_postgres"
+# - Creates a user named "fly_webhook_postgres" 
+# - Sets DATABASE_URL environment variable
+# - Grants appropriate permissions
 
 # Deploy with automatic migrations
 fly deploy
 
 # Test live deployment
-curl https://your-app-name.fly.dev/api/webhook
+curl https://fly-webhook-postgres.fly.dev/api/webhook
 ```
 
 ### 4. Test Production Deployment
 ```bash
 # Health check
-curl https://your-app-name.fly.dev/api/webhook
+curl https://fly-webhook-postgres.fly.dev/api/webhook
 
 # Test webhook processing
-curl -X POST https://your-app-name.fly.dev/api/webhook \
+curl -X POST https://fly-webhook-postgres.fly.dev/api/webhook \
   -H "Content-Type: application/json" \
   -d '{"event": {"type": "create_pulse", "pulseName": "Test Task"}}'
 
 # View stored events
-curl 'https://your-app-name.fly.dev/api/webhook?events=true'
+curl 'https://fly-webhook-postgres.fly.dev/api/webhook?events=true'
 ```
 
 ## Database Features
@@ -232,9 +252,21 @@ docker-compose down     # Stop containers
 ## Production Deployment
 
 ### Database Setup
-1. Create PostgreSQL cluster: `fly postgres create`
-2. Attach to app: `fly postgres attach your-postgres-app -a your-app`
-3. Deploy with migrations: `fly deploy`
+1. Create PostgreSQL cluster: `fly postgres create --name webhook-postgres --region sea --initial-cluster-size 1 --vm-size shared-cpu-1x --volume-size 10`
+2. Create app: `fly apps create fly-webhook-postgres`
+3. Attach to app: `fly postgres attach webhook-postgres -a fly-webhook-postgres`
+4. Deploy with migrations: `fly deploy`
+
+**Multi-App Sharing Example:**
+```bash
+# First app (this template)
+fly postgres attach webhook-postgres -a fly-webhook-postgres
+
+# Second app (another webhook service)
+fly postgres attach webhook-postgres -a second-webhook-app
+
+# Each app gets its own isolated database within the same cluster
+```
 
 ### Scaling
 ```bash
@@ -249,13 +281,13 @@ fly machine update MACHINE_ID --vm-size shared-cpu-2x -a your-postgres-app
 ### Monitoring
 ```bash
 # Application logs
-fly logs -a your-app-name
+fly logs -a fly-webhook-postgres
 
 # Database logs  
-fly logs -a your-postgres-app
+fly logs -a webhook-postgres
 
 # Connection to database
-fly postgres connect -a your-postgres-app
+fly postgres connect -a webhook-postgres
 ```
 
 ## Example Use Cases
@@ -282,29 +314,29 @@ This template works perfectly for:
 ### Database Connection Issues
 ```bash
 # Check database status
-fly status -a your-postgres-app
+fly status -a webhook-postgres
 
 # Check app secrets
-fly secrets list -a your-app-name
+fly secrets list -a fly-webhook-postgres
 
 # Test database connection
-fly postgres connect -a your-postgres-app
+fly postgres connect -a webhook-postgres
 ```
 
 ### Migration Issues
 ```bash
 # Run migrations manually
-fly ssh console -a your-app-name
+fly ssh console -a fly-webhook-postgres
 npm run db:migrate
 ```
 
 ### Local Development
 ```bash
 # For local development with Fly.io database
-fly proxy 15432:5432 -a your-postgres-app
+fly proxy 15432:5432 -a webhook-postgres
 
 # Update .env.local
-DATABASE_URL=postgres://username:password@localhost:15432/database_name
+DATABASE_URL=postgres://fly_webhook_postgres:password@localhost:15432/fly_webhook_postgres
 ```
 
 ## Support

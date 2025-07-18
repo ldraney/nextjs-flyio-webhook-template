@@ -1,5 +1,5 @@
 # fly.toml app configuration file
-app = 'batch-webhook-fly'
+app = 'fly-webhook-postgres'
 primary_region = 'sea'
 
 [build]
