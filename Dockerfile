@@ -15,6 +15,9 @@ COPY . .
 # Build the app
 RUN npm run build
 
+# Copy static files for standalone mode
+RUN cp -r .next/static .next/standalone/.next/static
+
 # Expose port
 EXPOSE 3000
 
