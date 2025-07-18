@@ -2,6 +2,8 @@
 
 Production-ready webhook service template using Next.js 15, PostgreSQL, and Fly.io deployment with built-in observability.
 
+✅ **Fully Tested & Production Ready** - Successfully deployed at [fly-webhook-postgres.fly.dev](https://fly-webhook-postgres.fly.dev/api/webhook)
+
 ## Features
 
 ✅ **Next.js 15** with App Router and TypeScript  
