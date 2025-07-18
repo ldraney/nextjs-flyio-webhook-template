@@ -1,17 +1,18 @@
-# Next.js + Fly.io Webhook Template
+# Next.js + Fly.io Webhook Template with PostgreSQL
 
-Production-ready webhook service template using Next.js 14 and Fly.io deployment with built-in observability.
+Production-ready webhook service template using Next.js 15, PostgreSQL, and Fly.io deployment with built-in observability.
 
 ## Features
 
-✅ **Next.js 14** with App Router and TypeScript  
+✅ **Next.js 15** with App Router and TypeScript  
+✅ **PostgreSQL** database integration with connection pooling  
 ✅ **Fly.io deployment** with auto-scaling  
-✅ **Docker + docker-compose** for local development  
-✅ **Webhook endpoint** with GET/POST handling  
-✅ **Test scripts** for validation  
-✅ **Production observability** with Sentry + Fly.io metrics  
+✅ **Docker + docker-compose** for local development with PostgreSQL  
+✅ **Webhook endpoint** with GET/POST handling and database persistence  
+✅ **Database migrations** with automatic deployment  
+✅ **Health checks** with database connectivity monitoring  
 ✅ **Structured logging** with correlation IDs  
-✅ **Template-ready** for any webhook service  
+✅ **Template-ready** for any webhook service
 
 ## Quick Start
 
@@ -20,247 +21,296 @@ Production-ready webhook service template using Next.js 14 and Fly.io deployment
 # Clone or use as GitHub template
 git clone https://github.com/ldraney/nextjs-flyio-webhook-template.git my-webhook
 cd my-webhook
-```
-
-### 2. Local Development
-```bash
-# Install dependencies
 npm install
-
-# Start development server
-npm run dev
-# Visit: http://localhost:3005
-
-# Test webhook
-chmod +x scripts/test-webhook.sh
-./scripts/test-webhook.sh
 ```
 
-### 3. Docker Testing
+### 2. Local Development with Docker
 ```bash
-# Build and run container
+# Start with PostgreSQL database
 docker-compose up --build
 
-# Test containerized version
-./scripts/test-webhook.sh http://localhost:3005
+# Test webhook endpoints
+curl http://localhost:3005/api/webhook
+curl -X POST http://localhost:3005/api/webhook -H "Content-Type: application/json" -d '{"event": {"type": "test", "data": "sample"}}'
+
+# View events with database data
+curl 'http://localhost:3005/api/webhook?events=true'
 ```
 
-### 4. Deploy to Fly.io
-```bash
-# Install Fly CLI: https://fly.io/docs/hands-on/install-flyctl/
-# Login: fly auth login
+### 3. Deploy to Fly.io
 
+#### Create PostgreSQL Database
+```bash
+# Install Fly CLI and login
+fly auth login
+
+# Create PostgreSQL cluster
+fly postgres create
+# Choose:
+# - App name: your-org-postgres
+# - Organization: Your organization
+# - Region: Same as your app (e.g., sea)
+# - Configuration: High Availability for production
+# - VM Size: shared-cpu-1x (can scale later)
+
+# Save the database credentials shown after creation!
+```
+
+#### Deploy Application
+```bash
 # Launch app (choose unique name)
 fly launch
 
-# Deploy
+# Attach database to your app
+fly postgres attach your-org-postgres -a your-app-name
+
+# Deploy with automatic migrations
 fly deploy
 
 # Test live deployment
-./scripts/test-webhook.sh https://your-app-name.fly.dev
+curl https://your-app-name.fly.dev/api/webhook
 ```
 
-### 5. Set Up Observability
+### 4. Test Production Deployment
 ```bash
-# Enable error tracking and performance monitoring
-flyctl ext sentry create
+# Health check
+curl https://your-app-name.fly.dev/api/webhook
 
-# View your monitoring dashboard
-flyctl apps errors
+# Test webhook processing
+curl -X POST https://your-app-name.fly.dev/api/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"event": {"type": "create_pulse", "pulseName": "Test Task"}}'
 
-# Live tail logs
-flyctl logs
+# View stored events
+curl 'https://your-app-name.fly.dev/api/webhook?events=true'
 ```
 
-## Observability & Monitoring
+## Database Features
 
-This template includes production-ready observability out of the box:
+### Webhook Event Storage
+All webhook events are automatically stored in PostgreSQL with:
+- **Correlation IDs** for request tracking
+- **Event type** classification  
+- **Full payload** as JSONB
+- **Processing status** tracking
+- **Timestamps** for created/updated times
 
-### 🚨 Error Tracking (Sentry)
-- **Automatic setup**: `flyctl ext sentry create`
-- **Free for 1 year**: Team plan worth $26/month
-- **Webhook failure alerts**: Get notified when webhooks fail
-- **Performance monitoring**: Track response times and bottlenecks
-- **Access**: `flyctl apps errors` opens Sentry dashboard
+### Database Health Monitoring
+The application includes:
+- **Connection pooling** for optimal performance
+- **Health checks** exposed via API endpoints
+- **Automatic reconnection** handling
+- **Environment-specific SSL** configuration
 
-### 📊 Infrastructure Metrics (Fly.io)
-- **Automatic monitoring**: No setup required
-- **HTTP metrics**: Request counts, response times, error rates
-- **Resource usage**: CPU, memory, network utilization
-- **Health checks**: Built-in endpoint monitoring
-- **Access**: Fly.io dashboard or `https://api.fly.io/prometheus/personal`
+### Migration System
+- **Automatic migrations** on deployment
+- **Version tracking** to prevent duplicate runs
+- **Rollback safety** with transaction handling
 
-### 📝 Structured Logging
-- **JSON formatted**: Easy parsing and searching
-- **Correlation IDs**: Track individual requests end-to-end
-- **Webhook context**: Payload details, processing time, errors
-- **Access**: `flyctl logs` for live tail, `flyctl logs --app your-app` for history
+## API Endpoints
 
-### 🔍 What You Can Monitor
-- ✅ Webhook delivery success/failure rates
-- ✅ Response times and performance trends  
-- ✅ Error details with stack traces
-- ✅ Request volume and traffic patterns
-- ✅ Service uptime and availability
-- ✅ Resource usage under load
+### `GET /api/webhook`
+Health check with database status:
+```json
+{
+  "status": "ready",
+  "service": "batch-webhook-fly",
+  "timestamp": "2025-07-18T13:56:11.058Z",
+  "environment": "production",
+  "database": {
+    "connected": true,
+    "status": "healthy"
+  },
+  "message": "Webhook endpoint is operational"
+}
+```
 
-### Accessing Your Monitoring
-```bash
-# Real-time error tracking
-flyctl apps errors
+### `GET /api/webhook?events=true`
+Health check with recent events from database:
+```json
+{
+  "status": "ready",
+  "database": {
+    "connected": true,
+    "status": "healthy"
+  },
+  "recent_events": [
+    {
+      "id": 1,
+      "correlation_id": "abc123",
+      "event_type": "test",
+      "payload": {"event": {"type": "test", "data": "sample"}},
+      "processed": true,
+      "created_at": "2025-07-18T13:56:16.514Z"
+    }
+  ]
+}
+```
 
-# Live application logs  
-flyctl logs
-
-# Infrastructure metrics
-# Visit: https://fly.io/dashboard/{your-org}/metrics
-
-# Health check status
-flyctl status
+### `POST /api/webhook`
+Process webhook events with database persistence:
+```json
+{
+  "status": "success",
+  "correlation_id": "abc123",
+  "event_type": "test",
+  "timestamp": "2025-07-18T13:56:16.530Z",
+  "message": "Webhook processed and stored successfully"
+}
 ```
 
 ## Project Structure
 
 ```
-├── fly.toml                 # Fly.io configuration with health checks
-├── Dockerfile              # Production container
-├── docker-compose.yml      # Local development
-├── next.config.js          # Next.js configuration
 ├── app/
-│   ├── layout.tsx          # Root layout
-│   ├── page.tsx            # Homepage with status
-│   └── api/
-│       └── webhook/
-│           └── route.ts    # Main webhook endpoint with logging
-└── scripts/
-    └── test-webhook.sh     # Testing script for all environments
+│   ├── api/
+│   │   └── webhook/
+│   │       └── route.ts          # Enhanced webhook API with database
+│   ├── layout.tsx               # Root layout
+│   └── page.tsx                 # Homepage with status
+├── lib/
+│   └── database.ts              # PostgreSQL utilities and connection
+├── scripts/
+│   ├── init-db.js              # Database initialization
+│   └── migrate.js              # Database migrations
+├── docker-compose.yml          # Local development with PostgreSQL
+├── Dockerfile                  # Production container
+├── fly.toml                    # Fly.io configuration with migrations
+└── README.md
 ```
 
-## Webhook Endpoints
+## Environment Variables
 
-### `GET /api/webhook`
-Returns service status and monitoring information.
+### Required
+- `DATABASE_URL` - PostgreSQL connection string (set automatically by Fly.io)
+- `NODE_ENV` - Environment (development/production)
 
-**Response:**
-```json
-{
-  "status": "ready",
-  "service": "batch-webhook-fly",
-  "timestamp": "2025-07-13T15:30:00.000Z",
-  "environment": "production",
-  "message": "Webhook endpoint is operational"
-}
+### Optional
+- `PORT` - Server port (default: 3000)
+
+## Database Schema
+
+### `webhook_events` Table
+```sql
+CREATE TABLE webhook_events (
+  id SERIAL PRIMARY KEY,
+  correlation_id VARCHAR(255) NOT NULL,
+  event_type VARCHAR(255),
+  payload JSONB,
+  processed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
 ```
 
-### `POST /api/webhook`
-Handles webhook payloads with comprehensive logging:
+### Indexes
+- `correlation_id` - For tracking specific requests
+- `event_type` - For filtering by event type
+- `created_at` - For chronological queries
 
-- **Challenge verification**: Echoes `{"challenge": "value"}` for service setup
-- **Payload processing**: Accepts and processes JSON data
-- **Error handling**: Structured error responses with correlation IDs
-- **Monitoring**: Automatic error tracking and performance metrics
+## Development Scripts
 
-## Customization
-
-### 1. Modify Webhook Logic
-Edit `app/api/webhook/route.ts` to add your specific webhook processing:
-
-```typescript
-// Add your business logic here
-console.log(`🔔 [${correlationId}] Processing webhook:`, event.type)
-
-if (event?.type === 'your_event_type') {
-  // Process your event
-  await processYourEvent(event)
-  console.log(`✅ [${correlationId}] Successfully processed ${event.type}`)
-}
-```
-
-### 2. Environment Variables
-Set in Fly.io:
 ```bash
-fly secrets set YOUR_API_KEY=your_value
-fly secrets set YOUR_CONFIG=your_value
+# Development
+npm run dev              # Start development server
+npm run build           # Build for production
+npm run start           # Start production server
 
-# Sentry DSN is set automatically by flyctl ext sentry create
+# Code Quality
+npm run lint            # Run ESLint
+npm run type-check      # Run TypeScript checking
+
+# Database
+npm run db:init         # Initialize database (development)
+npm run db:migrate      # Run database migrations
+
+# Docker
+docker-compose up       # Start with PostgreSQL
+docker-compose down     # Stop containers
 ```
 
-### 3. Customize Monitoring
+## Production Deployment
+
+### Database Setup
+1. Create PostgreSQL cluster: `fly postgres create`
+2. Attach to app: `fly postgres attach your-postgres-app -a your-app`
+3. Deploy with migrations: `fly deploy`
+
+### Scaling
 ```bash
-# Add custom Sentry tags for different webhook types
-# Edit app/api/webhook/route.ts:
+# Scale application
+fly scale count 2
+fly scale vm shared-cpu-2x
 
-import * as Sentry from "@sentry/nextjs"
-
-Sentry.setTag("webhook.type", event.type)
-Sentry.setContext("webhook.payload", { size: JSON.stringify(body).length })
+# Scale database
+fly machine update MACHINE_ID --vm-size shared-cpu-2x -a your-postgres-app
 ```
 
-### 4. App Settings
-- **App name**: Edit `app = "your-app-name"` in `fly.toml`
-- **Region**: Change `primary_region` in `fly.toml`
-- **Port**: Modify ports in `docker-compose.yml` and `package.json`
+### Monitoring
+```bash
+# Application logs
+fly logs -a your-app-name
+
+# Database logs  
+fly logs -a your-postgres-app
+
+# Connection to database
+fly postgres connect -a your-postgres-app
+```
 
 ## Example Use Cases
 
 This template works perfectly for:
-- **Monday.com webhooks**: Task creation, status updates
-- **GitHub webhooks**: Repository events, PR notifications  
-- **Stripe webhooks**: Payment processing, subscription events
-- **Slack webhooks**: Message processing, slash commands
-- **Custom API webhooks**: Any service that sends HTTP callbacks
-
-## Testing & Validation
-
-The included test script validates all monitoring components:
-
-```bash
-# Test any deployment with full observability
-./scripts/test-webhook.sh https://your-deployment.fly.dev
-
-# Check logs for correlation IDs and structured data
-flyctl logs
-
-# Verify error tracking (test with invalid payload)
-curl -X POST https://your-app.fly.dev/api/webhook -d "invalid-json"
-```
+- **Monday.com webhooks** - Task creation, status updates with database tracking
+- **GitHub webhooks** - Repository events, PR notifications with audit trail
+- **Stripe webhooks** - Payment processing, subscription events with persistence
+- **Slack webhooks** - Message processing, slash commands with history
+- **Custom API webhooks** - Any service that sends HTTP callbacks
 
 ## Production Features
 
-- **Auto-scaling**: Scales to 0 when idle, auto-starts on requests
-- **Health checks**: Built-in monitoring for Fly.io load balancer  
-- **HTTPS**: Automatic SSL/TLS termination
-- **Error tracking**: Production-grade error monitoring with Sentry
-- **Performance monitoring**: Request timing, throughput, and bottleneck detection
-- **Structured logging**: JSON logs with correlation IDs for easy debugging
-- **Container optimization**: Minimal Alpine Linux image
+- **Auto-scaling** - Scales to 0 when idle, auto-starts on requests
+- **Database persistence** - All webhook events stored with metadata
+- **Health monitoring** - Database connectivity and application health
+- **Automatic migrations** - Schema updates deployed with application
+- **SSL/TLS** - Automatic certificate management
+- **Error tracking** - Structured logging with correlation IDs
+- **Connection pooling** - Optimized database performance
 
 ## Troubleshooting
 
-### Observability Issues
+### Database Connection Issues
 ```bash
-# Check if Sentry is working
-flyctl apps errors
+# Check database status
+fly status -a your-postgres-app
 
-# Verify webhook logs are structured  
-flyctl logs | grep "🔔"
+# Check app secrets
+fly secrets list -a your-app-name
 
-# Test error tracking
-curl -X POST https://your-app.fly.dev/api/webhook \
-  -H "Content-Type: application/json" \
-  -d "invalid-json"
+# Test database connection
+fly postgres connect -a your-postgres-app
 ```
 
-### Common Monitoring Questions
-- **"Where are my metrics?"** → Fly.io dashboard + `flyctl apps errors`
-- **"How do I track specific webhook types?"** → Add custom Sentry tags
-- **"Can I export logs?"** → Yes, Fly.io supports log aggregation services
-- **"What's my uptime?"** → Check Fly.io dashboard health checks
+### Migration Issues
+```bash
+# Run migrations manually
+fly ssh console -a your-app-name
+npm run db:migrate
+```
+
+### Local Development
+```bash
+# For local development with Fly.io database
+fly proxy 15432:5432 -a your-postgres-app
+
+# Update .env.local
+DATABASE_URL=postgres://username:password@localhost:15432/database_name
+```
 
 ## Support
 
 - **Fly.io docs**: https://fly.io/docs/
-- **Sentry docs**: https://docs.sentry.io/
+- **PostgreSQL docs**: https://www.postgresql.org/docs/
 - **Next.js docs**: https://nextjs.org/docs
 - **Template issues**: Open an issue on this repository
 

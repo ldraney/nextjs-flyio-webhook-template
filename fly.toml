@@ -1,9 +1,5 @@
-# fly.toml app configuration file generated for fly-webhook-template on 2025-07-13T09:04:32-06:00
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
-app = 'fly-webhook-template'
+# fly.toml app configuration file
+app = 'batch-webhook-fly'
 primary_region = 'sea'
 
 [build]
@@ -11,6 +7,9 @@ primary_region = 'sea'
 [env]
   NODE_ENV = 'production'
   PORT = '3000'
+
+[deploy]
+  release_command = 'npm run db:migrate'
 
 [http_service]
   internal_port = 3000
@@ -21,10 +20,10 @@ primary_region = 'sea'
 
   [[http_service.checks]]
     interval = '30s'
-    timeout = '5s'
+    timeout = '10s'
     grace_period = '10s'
     method = 'GET'
-    path = '/'
+    path = '/api/webhook'
 
 [[vm]]
   size = 'shared-cpu-1x'
