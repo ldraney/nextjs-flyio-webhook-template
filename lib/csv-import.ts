@@ -36,7 +36,7 @@ export async function importFormulasFromCsv(csvContent: string): Promise<ImportR
   };
 
   try {
-    const records = await new Promise<any[]>((resolve, reject) => {
+    const records = await new Promise<unknown[]>((resolve, reject) => {
       parse(csvContent, {
         columns: true,
         skip_empty_lines: true,
