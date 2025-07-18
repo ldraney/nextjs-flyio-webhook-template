@@ -19,34 +19,22 @@ async function runMigrations() {
       );
     `)
     
-    // Example migration - add this pattern for future schema changes
+    // Read and execute SQL migration files
+    const fs = require('fs')
+    const path = require('path')
+    
     const migrations = [
       {
-        version: '20250101_create_webhook_events',
-        sql: `
-          CREATE TABLE IF NOT EXISTS webhook_events (
-            id SERIAL PRIMARY KEY,
-            correlation_id VARCHAR(255) NOT NULL,
-            event_type VARCHAR(255),
-            payload JSONB,
-            processed BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW()
-          );
-        `
+        version: '20250101_create_tables',
+        sqlFile: 'db/migrations/001_create_tables.sql'
       },
       {
-        version: '20250102_add_webhook_indexes',
-        sql: `
-          CREATE INDEX IF NOT EXISTS idx_webhook_events_correlation_id 
-          ON webhook_events(correlation_id);
-          
-          CREATE INDEX IF NOT EXISTS idx_webhook_events_event_type 
-          ON webhook_events(event_type);
-          
-          CREATE INDEX IF NOT EXISTS idx_webhook_events_created_at 
-          ON webhook_events(created_at);
-        `
+        version: '20250102_add_formula_status',
+        sqlFile: 'db/migrations/002_add_formula_status.sql'
+      },
+      {
+        version: '20250103_add_review_reasons',
+        sqlFile: 'db/migrations/003_add_review_reasons.sql'
       }
     ]
     
@@ -58,7 +46,15 @@ async function runMigrations() {
       
       if (rows.length === 0) {
         console.log(`🔄 Applying migration: ${migration.version}`)
-        await client.query(migration.sql)
+        
+        // Read SQL file
+        const sqlFilePath = path.join(__dirname, '..', migration.sqlFile)
+        const sql = fs.readFileSync(sqlFilePath, 'utf8')
+        
+        // Execute SQL
+        await client.query(sql)
+        
+        // Mark as applied
         await client.query(
           'INSERT INTO schema_migrations (version) VALUES ($1)',
           [migration.version]
