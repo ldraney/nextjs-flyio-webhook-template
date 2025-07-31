@@ -1,20 +1,67 @@
-# Next.js + Fly.io Webhook Template with PostgreSQL
+# EPO → Bulk Batch Traceability Automation
 
-Production-ready webhook service template using Next.js 15, PostgreSQL, and Fly.io deployment with built-in observability.
+**Monday.com cross-board automation service** that automatically updates Bulk Batch Traceability tickets to "To Do" status when all connected EPO items reach "QA Passed" status.
 
-✅ **Fully Tested & Production Ready** - Successfully deployed at [fly-webhook-postgres.fly.dev](https://fly-webhook-postgres.fly.dev/api/webhook)
+✅ **Ready for Production Deployment** - Complete automation system built on Next.js + Fly.io
 
-## Features
+## 🎯 **EPO Automation Overview**
 
+This service solves a critical workflow gap: **Monday.com's native automations cannot handle complex cross-board logic** like "when ALL EPOs are QA Passed, update bulk ticket status." Our automation bridges this gap with:
+
+- **🔄 Scheduled Processing**: Every 10 minutes during business hours
+- **🎯 Smart Logic**: Only updates when ALL connected EPOs pass QA
+- **🛡️ Safety First**: Dry run mode, comprehensive error handling
+- **📊 Full Visibility**: Detailed logs and processing summaries
+- **☁️ Auto-scaling**: Fly.io deployment with zero-cost idle time
+
+## 🚀 **EPO Automation Quick Start**
+
+### 1. Deploy to Fly.io
+```bash
+# Install Fly CLI and login
+curl -L https://fly.io/install.sh | sh
+fly auth login
+
+# Set Monday.com API token
+fly secrets set MONDAY_API_TOKEN=your_monday_token_here
+
+# Deploy automation service
+fly deploy
+
+# Test automation
+curl https://pel-epo-automation.fly.dev/api/epo-automation?dry=true
+```
+
+### 2. Board Configuration (Already Confirmed ✅)
+- **EPO Board**: `9387127195` (VRM - Purchasing workspace)
+  - Status: "QA Passed" triggers automation
+- **Bulk Batch Board**: `8768285252` (Lab workspace)  
+  - Updates to: "To Do" when all EPOs pass QA
+- **Connection**: Board relation columns verified and working
+
+### 3. Monitor Automation
+```bash
+# View logs
+fly logs
+
+# Check processing results
+curl https://pel-epo-automation.fly.dev/api/epo-automation
+
+# SSH for troubleshooting
+fly ssh console
+npm run epo-automation-dry
+```
+
+## Technical Features
+
+✅ **EPO Automation Logic** - Cross-board status checking and updates  
+✅ **Monday.com API Integration** - Full GraphQL integration with error handling  
+✅ **Scheduled Processing** - Cron jobs every 10 minutes during business hours  
 ✅ **Next.js 15** with App Router and TypeScript  
-✅ **PostgreSQL** database integration with connection pooling  
-✅ **Fly.io deployment** with auto-scaling  
-✅ **Docker + docker-compose** for local development with PostgreSQL  
-✅ **Webhook endpoint** with GET/POST handling and database persistence  
-✅ **Database migrations** with automatic deployment  
-✅ **Health checks** with database connectivity monitoring  
-✅ **Structured logging** with correlation IDs  
-✅ **Template-ready** for any webhook service
+✅ **Fly.io deployment** with auto-scaling and health checks  
+✅ **Dry Run Mode** - Test automation without making changes  
+✅ **Webhook Support** - Real-time triggers from Monday.com status changes  
+✅ **Comprehensive Logging** - Detailed processing summaries and error tracking
 
 ## Quick Start
 

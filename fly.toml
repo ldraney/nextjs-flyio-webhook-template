@@ -1,6 +1,6 @@
 # fly.toml app configuration file
-app = 'fly-webhook-postgres'
-primary_region = 'sea'
+app = 'pel-epo-automation'
+primary_region = 'ord'
 
 [build]
 
@@ -23,7 +23,15 @@ primary_region = 'sea'
     timeout = '10s'
     grace_period = '10s'
     method = 'GET'
-    path = '/api/webhook'
+    path = '/api/epo-automation'
 
 [[vm]]
   size = 'shared-cpu-1x'
+
+# Scheduled process for EPO automation
+[processes]
+  app = "npm start"
+  cron = "node scripts/run-epo-automation.js"
+
+[cron]
+  "*/10 * * * *" = "node scripts/run-epo-automation.js"  # Every 10 minutes
