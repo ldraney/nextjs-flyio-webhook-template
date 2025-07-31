@@ -165,6 +165,43 @@ Initial testing showed most bulk batch items don't currently have EPO connection
 - Confirm status column option indices
 - Test with items that have known EPO connections
 
+## 🔍 **CRITICAL: Monday.com Board Relations**
+
+### ⚠️ **Board Relations Require Special GraphQL Syntax**
+**DISCOVERED 2025-07-30**: Monday.com board relation columns **DO NOT** work with standard GraphQL queries.
+
+❌ **This FAILS** (returns `value: null`):
+```graphql
+column_values {
+  id
+  value  # ← Always null for board relations!
+}
+```
+
+✅ **This WORKS** (returns actual connections):
+```graphql
+column_values {
+  id
+  ... on BoardRelationValue {
+    linked_items {
+      id
+      name
+    }
+  }
+}
+```
+
+### **Implementation Pattern**
+```javascript
+// ❌ WRONG: This will always fail
+const epoData = JSON.parse(epoColumn.value); // value is null!
+
+// ✅ CORRECT: Use linked_items from GraphQL fragment
+const epoIds = epoColumn.linked_items.map(item => item.id);
+```
+
+**See `docs/monday-board-relations-guide.md` for complete documentation.**
+
 ### Monitoring Production
 - Check `fly logs` for processing summaries
 - Monitor automation frequency and success rate

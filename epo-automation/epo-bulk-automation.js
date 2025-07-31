@@ -134,7 +134,7 @@ async function processBulkItem(bulkItem) {
 }
 
 /**
- * Check if all EPO items have "QA Passed" status
+ * Check if all EPO items have "QA Passed" or "Cancelled" status
  */
 async function checkAllEPOsQAPassed(epoIds) {
   try {
@@ -155,19 +155,21 @@ async function checkAllEPOsQAPassed(epoIds) {
     const epoResponse = await monday.api(epoItemsQuery);
     const epoItems = epoResponse.data.items;
     
-    let qaPassedCount = 0;
+    let readyCount = 0;
     const totalCount = epoItems.length;
     
     for (const epo of epoItems) {
       const statusColumn = epo.column_values[0];
-      if (statusColumn?.text === 'QA Passed') {
-        qaPassedCount++;
+      const status = statusColumn?.text;
+      // Both "QA Passed" and "Cancelled" count as "ready"
+      if (status === 'QA Passed' || status === 'Cancelled') {
+        readyCount++;
       }
     }
     
     return {
-      allPassed: qaPassedCount === totalCount,
-      qaPassedCount,
+      allPassed: readyCount === totalCount,
+      qaPassedCount: readyCount, // Rename to readyCount in future, keeping for compatibility
       totalCount,
       epoItems
     };
@@ -175,6 +177,118 @@ async function checkAllEPOsQAPassed(epoIds) {
   } catch (error) {
     console.error('❌ Error checking EPO statuses:', error.message);
     return { allPassed: false, qaPassedCount: 0, totalCount: 0 };
+  }
+}
+
+/**
+ * Process connections for a specific EPO that changed status
+ * Only checks bulk items connected to this specific EPO
+ */
+async function processEPOConnections(epoId) {
+  console.log(`🎯 Processing connections for EPO: ${epoId}\n`);
+  
+  try {
+    // Find all bulk items connected to this specific EPO
+    const connectedItemsQuery = `
+      query {
+        items(ids: [${epoId}]) {
+          id
+          name
+          column_values {
+            id
+            ... on BoardRelationValue {
+              linked_items {
+                id
+                name
+                board {
+                  id
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const epoResponse = await monday.api(connectedItemsQuery);
+    const epoItem = epoResponse.data.items[0];
+    
+    if (!epoItem) {
+      console.log(`❌ EPO ${epoId} not found`);
+      return { processed: 0, updated: 0 };
+    }
+    
+    console.log(`📋 EPO: ${epoItem.name}`);
+    
+    // Find all board relations from this EPO
+    const connectedItems = [];
+    
+    for (const column of epoItem.column_values) {
+      if (column.linked_items && column.linked_items.length > 0) {
+        for (const linkedItem of column.linked_items) {
+          // Only process items from the Bulk Batch Traceability board
+          if (linkedItem.board.id === BOARD_IDS.BULK_BATCH_TRACEABILITY) {
+            connectedItems.push(linkedItem);
+          }
+        }
+      }
+    }
+    
+    if (connectedItems.length === 0) {
+      console.log(`⏸️  No bulk batch items connected to EPO ${epoItem.name}`);
+      return { processed: 0, updated: 0 };
+    }
+    
+    console.log(`🔗 Found ${connectedItems.length} connected bulk items: ${connectedItems.map(i => i.name).join(', ')}\n`);
+    
+    // Now get full details for each connected bulk item and process them
+    const bulkItemIds = connectedItems.map(item => item.id);
+    const bulkItemsQuery = `
+      query {
+        items(ids: [${bulkItemIds.join(',')}]) {
+          id
+          name
+          column_values {
+            id
+            text
+            value
+            ... on BoardRelationValue {
+              linked_items {
+                id
+                name
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const bulkResponse = await monday.api(bulkItemsQuery);
+    const bulkItems = bulkResponse.data.items;
+    
+    let updatedCount = 0;
+    
+    for (const bulkItem of bulkItems) {
+      const result = await processBulkItem(bulkItem);
+      if (result.updated) {
+        updatedCount++;
+        console.log(`✅ Updated: ${bulkItem.name} → To Do (triggered by EPO ${epoItem.name})`);
+      } else if (result.reason) {
+        console.log(`⏸️  Skipped: ${bulkItem.name} - ${result.reason}`);
+      }
+    }
+    
+    console.log(`\n🎯 Targeted Processing Complete: ${updatedCount}/${bulkItems.length} bulk items updated\n`);
+    
+    return { processed: bulkItems.length, updated: updatedCount };
+    
+  } catch (error) {
+    console.error('❌ Targeted Processing Error:', error.message);
+    if (error.response?.data) {
+      console.error('API Response:', JSON.stringify(error.response.data, null, 2));
+    }
+    return { processed: 0, updated: 0 };
   }
 }
 
@@ -283,8 +397,13 @@ async function dryRunEPOBulkAutomation() {
 async function main() {
   const args = process.argv.slice(2);
   const isDryRun = args.includes('--dry-run') || args.includes('-d');
+  const targetedIndex = args.indexOf('--targeted');
   
-  if (isDryRun) {
+  if (targetedIndex !== -1 && targetedIndex + 1 < args.length) {
+    // Targeted processing for specific EPO
+    const epoId = args[targetedIndex + 1];
+    await processEPOConnections(epoId);
+  } else if (isDryRun) {
     await dryRunEPOBulkAutomation();
   } else {
     await runEPOBulkAutomation();
@@ -299,6 +418,7 @@ if (require.main === module) {
 module.exports = { 
   runEPOBulkAutomation, 
   dryRunEPOBulkAutomation,
+  processEPOConnections,
   processBulkItem,
   checkAllEPOsQAPassed 
 };

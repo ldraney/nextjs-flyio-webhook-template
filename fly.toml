@@ -8,8 +8,8 @@ primary_region = 'ord'
   NODE_ENV = 'production'
   PORT = '3000'
 
-[deploy]
-  release_command = 'npm run db:migrate'
+# [deploy]
+#   release_command = 'npm run db:migrate'
 
 [http_service]
   internal_port = 3000
@@ -17,6 +17,7 @@ primary_region = 'ord'
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
+  processes = ["app"]
 
   [[http_service.checks]]
     interval = '30s'
