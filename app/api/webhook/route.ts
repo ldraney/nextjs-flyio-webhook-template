@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { checkDatabaseHealth, saveWebhookEvent, getWebhookEvents } from '@/lib/database'
 
+interface WebhookPayload {
+  challenge?: string;
+  event?: {
+    type?: string;
+    columnId?: string;
+    pulseId?: string;
+    value?: {
+      label?: {
+        text?: string;
+      };
+    };
+  };
+  type?: string;
+  pulseName?: string;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const isDbHealthy = await checkDatabaseHealth()
@@ -70,7 +86,7 @@ export async function POST(request: NextRequest) {
       console.log(`✅ [${correlationId}] Webhook stored in database with ID: ${savedEvent.id}`)
       
       // Process the webhook based on event type
-      await processWebhookEvent(correlationId, eventType, body)
+      await processWebhookEvent(correlationId, eventType, body as WebhookPayload)
       
     } catch (dbError) {
       console.error(`❌ [${correlationId}] Database error:`, dbError)
@@ -97,27 +113,89 @@ export async function POST(request: NextRequest) {
 }
 
 // Process different types of webhook events
-async function processWebhookEvent(correlationId: string, eventType: string, payload: unknown) {
+async function processWebhookEvent(correlationId: string, eventType: string, payload: WebhookPayload) {
   console.log(`🔄 [${correlationId}] Processing event type: ${eventType}`)
   
-  switch (eventType) {
-    case 'create_pulse':
-      console.log(`📝 [${correlationId}] Task created: ${(payload as { pulseName?: string }).pulseName || 'Unknown'}`)
-      break
+  // Handle EPO automation for column value changes
+  if (eventType === 'update_column_value' && payload.event?.columnId === 'deal_stage') {
+    const newStatus = payload.event?.value?.label?.text;
+    
+    if (newStatus && ['QA Passed', 'Cancelled'].includes(newStatus)) {
+      const epoId = payload.event?.pulseId;
       
-    case 'update_pulse':
-      console.log(`📝 [${correlationId}] Task updated: ${(payload as { pulseName?: string }).pulseName || 'Unknown'}`)
-      break
-      
-    case 'test':
-      console.log(`🧪 [${correlationId}] Test event received`)
-      break
-      
-    default:
-      console.log(`❓ [${correlationId}] Unknown event type: ${eventType}`)
+      if (epoId) {
+        console.log(`🎯 [${correlationId}] EPO ${epoId} status changed to "${newStatus}", triggering targeted automation...`);
+        
+        try {
+          // Import and run targeted EPO processing
+          const { spawn } = await import('child_process');
+          
+          const result = await new Promise((resolve, reject) => {
+            const child = spawn('node', ['epo-automation/epo-bulk-automation.js', '--targeted', epoId], {
+              cwd: process.cwd(),
+              env: { ...process.env }
+            });
+            
+            let stdout = '';
+            let stderr = '';
+            
+            child.stdout.on('data', (data) => {
+              stdout += data.toString();
+            });
+            
+            child.stderr.on('data', (data) => {
+              stderr += data.toString();
+            });
+            
+            child.on('close', (code) => {
+              if (code === 0) {
+                const summaryMatch = stdout.match(/(\d+) bulk items would be updated|(\d+) bulk items updated/);
+                const processedMatch = stdout.match(/Processing (\d+) bulk|Analyzing (\d+) bulk/);
+                
+                const updated = summaryMatch ? parseInt(summaryMatch[1] || summaryMatch[2] || '0') : 0;
+                const processed = processedMatch ? parseInt(processedMatch[1] || processedMatch[2] || '0') : 0;
+                
+                resolve({ processed, updated, output: stdout });
+              } else {
+                reject(new Error(`Targeted automation failed with code ${code}: ${stderr}`));
+              }
+            });
+          });
+          
+          const automationResult = result as { updated: number; processed: number };
+          console.log(`✅ [${correlationId}] EPO automation completed: ${automationResult.updated}/${automationResult.processed} bulk items updated`);
+          
+        } catch (error) {
+          console.error(`❌ [${correlationId}] EPO automation error:`, error);
+        }
+      } else {
+        console.log(`⚠️ [${correlationId}] No EPO ID found in webhook payload`);
+      }
+    } else {
+      console.log(`📝 [${correlationId}] EPO status changed to "${newStatus}" - no automation needed`);
+    }
+    
+  } else {
+    // Handle other webhook events
+    switch (eventType) {
+      case 'create_pulse':
+        console.log(`📝 [${correlationId}] Task created: ${payload.pulseName || 'Unknown'}`)
+        break
+        
+      case 'update_pulse':
+        console.log(`📝 [${correlationId}] Task updated: ${payload.pulseName || 'Unknown'}`)
+        break
+        
+      case 'test':
+        console.log(`🧪 [${correlationId}] Test event received`)
+        break
+        
+      default:
+        console.log(`❓ [${correlationId}] Unknown event type: ${eventType}`)
+    }
   }
   
-  // Mark as processed (you can add more complex processing logic here)
+  // Mark as processed
   try {
     const { markWebhookProcessed } = await import('@/lib/database')
     await markWebhookProcessed(correlationId)

@@ -29,8 +29,8 @@ export default function HomePage() {
         border: '1px solid #ddd'
       }}>
         <h3>How it works</h3>
-        <p>Automatically updates Bulk Batch Traceability items to "To Do" when all connected EPO items reach "QA Passed" or "Cancelled" status.</p>
-        <p><strong>Webhook URL:</strong> <code>https://pel-epo-automation.fly.dev/api/epo-automation</code></p>
+        <p>Automatically updates Bulk Batch Traceability items to &quot;To Do&quot; when all connected EPO items reach &quot;QA Passed&quot; or &quot;Cancelled&quot; status.</p>
+        <p><strong>Webhook URL:</strong> <code>https://pel-epo-automation.fly.dev/api/webhook</code></p>
       </div>
     </main>
   )

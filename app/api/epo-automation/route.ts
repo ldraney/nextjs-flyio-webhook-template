@@ -150,6 +150,12 @@ export async function POST(request: NextRequest) {
     
     console.log('📦 Received Monday.com webhook:', JSON.stringify(body, null, 2));
     
+    // Handle Monday.com webhook challenge verification
+    if (body.challenge) {
+      console.log('🔐 Responding to Monday.com webhook challenge');
+      return NextResponse.json({ challenge: body.challenge });
+    }
+    
     // Check if this is an EPO status change to "QA Passed" or "Cancelled"
     if (body.event?.type === 'update_column_value' && 
         body.event?.columnId === COLUMN_IDS.EPO_STATUS &&
